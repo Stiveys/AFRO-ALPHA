@@ -23,8 +23,38 @@ const ContactPage = () => {
 
   const onSubmit = (data: ContactFormData) => {
     console.log('Form submitted:', data);
-    // Here you would typically send the data to your backend
-    alert('Thank you for your inquiry. We will contact you within 24 hours.');
+    
+    // Create email content
+    const emailSubject = `New Consultation Request - ${data.service}`;
+    const emailBody = `
+New consultation request received:
+
+Name: ${data.name}
+Company: ${data.company}
+Email: ${data.email}
+Phone: ${data.phone}
+Service Interest: ${data.service}
+
+Message:
+${data.message}
+
+Confidentiality Agreement: Accepted
+
+Submitted on: ${new Date().toLocaleString()}
+    `.trim();
+
+    // Create mailto links for both email addresses
+    const adminEmail = 'admin@afroalphasecurityltd.com';
+    const infoEmail = 'info@afroalphasecurityltd.com';
+    
+    // For demonstration, we'll use mailto (in production, you'd use a backend service)
+    const mailtoLink = `mailto:${adminEmail},${infoEmail}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+    
+    // Open email client
+    window.location.href = mailtoLink;
+    
+    // Show success message
+    alert('Thank you for your inquiry. Your email client will open to send the consultation request. We will contact you within 24 hours.');
     reset();
   };
 
@@ -226,7 +256,7 @@ const ContactPage = () => {
                     <Mail className="h-6 w-6 text-blue-600 mt-1" />
                     <div>
                       <h4 className="font-semibold text-gray-900">Email</h4>
-                      <p className="text-gray-600">info@afroalpha.com</p>
+                      <p className="text-gray-600">info@afroalphasecurityltd.com</p>
                       <p className="text-sm text-gray-500">We respond within 24 hours</p>
                     </div>
                   </div>
