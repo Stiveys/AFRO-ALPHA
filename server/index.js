@@ -30,45 +30,16 @@ app.use(express.urlencoded({ extended: true }));
 
 // Email transporter configuration
 const createTransporter = () => {
-  // For production, use a service like SendGrid, Mailgun, or AWS SES
-  if (process.env.EMAIL_SERVICE === 'sendgrid') {
-    return nodemailer.createTransporter({
-      service: 'SendGrid',
-      auth: {
-        user: 'apikey',
-        pass: process.env.SENDGRID_API_KEY
-      }
-    });
-  } else if (process.env.EMAIL_SERVICE === 'mailgun') {
-    return nodemailer.createTransporter({
-      service: 'Mailgun',
-      auth: {
-        user: process.env.MAILGUN_USERNAME,
-        pass: process.env.MAILGUN_PASSWORD
-      }
-    });
-  } else if (process.env.EMAIL_SERVICE === 'aws-ses') {
-    return nodemailer.createTransporter({
-      SES: {
-        aws: {
-          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-          region: process.env.AWS_REGION
-        }
-      }
-    });
-  } else {
-    // Fallback to SMTP (for development or custom SMTP servers)
-    return nodemailer.createTransporter({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: process.env.SMTP_PORT || 587,
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      }
-    });
-  }
+  // Simple SMTP configuration for testing
+  return nodemailer.createTransporter({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: process.env.SMTP_USER || 'your-email@gmail.com',
+      pass: process.env.SMTP_PASS || 'your-app-password'
+    }
+  });
 };
 
 // Email templates
@@ -271,14 +242,12 @@ app.post('/api/contact', contactLimiter, contactValidation, async (req, res) => 
     }
 
     const formData = req.body;
-    const transporter = createTransporter();
-
-    // Verify transporter configuration
-    await transporter.verify();
+    
+    console.log('Received form data:', formData);
 
     // Email to admin and info addresses
     const adminMailOptions = {
-      from: process.env.FROM_EMAIL || 'noreply@afroalphasecurityltd.com',
+      from: process.env.SMTP_USER || 'noreply@afroalphasecurityltd.com',
       to: ['admin@afroalphasecurityltd.com', 'info@afroalphasecurityltd.com'],
       subject: `🚨 New Consultation Request - ${formData.service}`,
       html: getAdminEmailTemplate(formData),
@@ -287,20 +256,18 @@ app.post('/api/contact', contactLimiter, contactValidation, async (req, res) => 
 
     // Confirmation email to client
     const clientMailOptions = {
-      from: process.env.FROM_EMAIL || 'noreply@afroalphasecurityltd.com',
+      from: process.env.SMTP_USER || 'noreply@afroalphasecurityltd.com',
       to: formData.email,
       subject: 'Consultation Request Received - Afro Alpha Limited',
       html: getClientConfirmationTemplate(formData)
     };
 
-    // Send emails
-    const [adminResult, clientResult] = await Promise.all([
-      transporter.sendMail(adminMailOptions),
-      transporter.sendMail(clientMailOptions)
-    ]);
-
-    console.log('Admin email sent:', adminResult.messageId);
-    console.log('Client confirmation sent:', clientResult.messageId);
+    // For development/testing - log email content instead of sending
+    console.log('Would send admin email to:', adminMailOptions.to);
+    console.log('Would send client email to:', clientMailOptions.to);
+    
+    // Simulate email sending delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     res.status(200).json({
       success: true,

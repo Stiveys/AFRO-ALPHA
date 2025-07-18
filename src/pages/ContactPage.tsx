@@ -33,6 +33,8 @@ const ContactPage = () => {
     setSubmitStatus({ type: null, message: '' });
 
     try {
+      console.log('Submitting form data:', data);
+      
       const response = await fetch('/api/contact', {
         method: 'POST',
         headers: {
@@ -41,12 +43,26 @@ const ContactPage = () => {
         body: JSON.stringify(data),
       });
 
-      const result = await response.json();
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      
+      let result;
+      const contentType = response.headers.get('content-type');
+      
+      if (contentType && contentType.includes('application/json')) {
+        result = await response.json();
+      } else {
+        const text = await response.text();
+        console.log('Non-JSON response:', text);
+        throw new Error('Server returned non-JSON response');
+      }
+      
+      console.log('Parsed result:', result);
 
       if (response.ok && result.success) {
         setSubmitStatus({
           type: 'success',
-          message: result.message
+          message: result.message || 'Your consultation request has been submitted successfully!'
         });
         reset();
       } else {
