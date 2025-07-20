@@ -3,11 +3,16 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
-const nodemailer = require('nodemailer');
+const { MailerSend, EmailParams, Sender, Recipient } = require('mailersend');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Initialize MailerSend
+const mailerSend = new MailerSend({
+  apiKey: process.env.MAILERSEND_API_KEY,
+});
 
 // Security middleware
 app.use(helmet());
@@ -28,20 +33,6 @@ const contactLimiter = rateLimit({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Email transporter configuration
-const createTransporter = () => {
-  // Simple SMTP configuration for testing
-  return nodemailer.createTransporter({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER || 'your-email@gmail.com',
-      pass: process.env.SMTP_PASS || 'your-app-password'
-    }
-  });
-};
-
 // Email templates
 const getAdminEmailTemplate = (formData) => {
   return `
@@ -53,11 +44,11 @@ const getAdminEmailTemplate = (formData) => {
       <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: linear-gradient(135deg, #3b82f6, #1e40af); color: white; padding: 20px; text-align: center; }
-        .content { background: #f8f9fa; padding: 30px; }
+        .header { background: linear-gradient(135deg, #3b82f6, #1e40af); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px; }
         .field { margin-bottom: 15px; }
         .label { font-weight: bold; color: #1e40af; }
-        .value { margin-top: 5px; padding: 10px; background: white; border-left: 4px solid #3b82f6; }
+        .value { margin-top: 5px; padding: 10px; background: white; border-left: 4px solid #3b82f6; border-radius: 4px; }
         .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
         .urgent { background: #fee2e2; border-left-color: #ef4444; }
       </style>
@@ -125,9 +116,9 @@ const getClientConfirmationTemplate = (formData) => {
       <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: linear-gradient(135deg, #3b82f6, #1e40af); color: white; padding: 20px; text-align: center; }
-        .content { background: #f8f9fa; padding: 30px; }
-        .highlight { background: #dbeafe; padding: 15px; border-left: 4px solid #3b82f6; margin: 20px 0; }
+        .header { background: linear-gradient(135deg, #3b82f6, #1e40af); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px; }
+        .highlight { background: #dbeafe; padding: 15px; border-left: 4px solid #3b82f6; margin: 20px 0; border-radius: 4px; }
         .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
         .contact-info { background: white; padding: 20px; margin: 20px 0; border-radius: 8px; }
       </style>
@@ -245,29 +236,42 @@ app.post('/api/contact', contactLimiter, contactValidation, async (req, res) => 
     
     console.log('Received form data:', formData);
 
-    // Email to admin and info addresses
-    const adminMailOptions = {
-      from: process.env.SMTP_USER || 'noreply@afroalphasecurityltd.com',
-      to: ['admin@afroalphasecurityltd.com', 'info@afroalphasecurityltd.com'],
-      subject: `🚨 New Consultation Request - ${formData.service}`,
-      html: getAdminEmailTemplate(formData),
-      priority: formData.service.includes('Emergency') || formData.service.includes('Fraud') ? 'high' : 'normal'
-    };
+    // Create sender
+    const sentFrom = new Sender(process.env.FROM_EMAIL, "Afro Alpha Limited");
 
-    // Confirmation email to client
-    const clientMailOptions = {
-      from: process.env.SMTP_USER || 'noreply@afroalphasecurityltd.com',
-      to: formData.email,
-      subject: 'Consultation Request Received - Afro Alpha Limited',
-      html: getClientConfirmationTemplate(formData)
-    };
+    // Create recipients for admin notification
+    const adminRecipients = [
+      new Recipient(process.env.ADMIN_EMAIL, "Admin Team"),
+      new Recipient(process.env.INFO_EMAIL, "Info Team")
+    ];
 
-    // For development/testing - log email content instead of sending
-    console.log('Would send admin email to:', adminMailOptions.to);
-    console.log('Would send client email to:', clientMailOptions.to);
-    
-    // Simulate email sending delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Create recipient for client confirmation
+    const clientRecipient = [new Recipient(formData.email, formData.name)];
+
+    // Admin notification email
+    const adminEmailParams = new EmailParams()
+      .setFrom(sentFrom)
+      .setTo(adminRecipients)
+      .setSubject(`🚨 New Consultation Request - ${formData.service}`)
+      .setHtml(getAdminEmailTemplate(formData))
+      .setText(`New consultation request from ${formData.name} (${formData.company}) for ${formData.service}. Email: ${formData.email}, Phone: ${formData.phone}. Message: ${formData.message}`);
+
+    // Client confirmation email
+    const clientEmailParams = new EmailParams()
+      .setFrom(sentFrom)
+      .setTo(clientRecipient)
+      .setSubject('Consultation Request Received - Afro Alpha Limited')
+      .setHtml(getClientConfirmationTemplate(formData))
+      .setText(`Dear ${formData.name}, thank you for contacting Afro Alpha Limited regarding our ${formData.service} services. We have received your consultation request and our team will respond within 24 hours.`);
+
+    // Send emails
+    console.log('Sending admin notification email...');
+    await mailerSend.email.send(adminEmailParams);
+    console.log('Admin notification email sent successfully');
+
+    console.log('Sending client confirmation email...');
+    await mailerSend.email.send(clientEmailParams);
+    console.log('Client confirmation email sent successfully');
 
     res.status(200).json({
       success: true,
@@ -294,7 +298,8 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    service: 'Afro Alpha Limited API'
+    service: 'Afro Alpha Limited API',
+    mailersend: 'Configured'
   });
 });
 
@@ -317,8 +322,10 @@ app.use('*', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Afro Alpha Limited API server running on port ${PORT}`);
-  console.log(`📧 Email service: ${process.env.EMAIL_SERVICE || 'SMTP'}`);
+  console.log(`📧 Email service: MailerSend`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`✉️  Admin Email: ${process.env.ADMIN_EMAIL}`);
+  console.log(`✉️  Info Email: ${process.env.INFO_EMAIL}`);
 });
 
 module.exports = app;
